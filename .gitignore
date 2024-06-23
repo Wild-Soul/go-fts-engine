@@ -1,0 +1,8 @@
+# Ignore data files
+data/*
+
+# Ignore .vscode files
+.vscode
+
+# Ignore all patch files
+*.patch
