@@ -7,14 +7,14 @@ import (
 )
 
 type Worker interface {
-	Work(id int)
+	Work(id int32)
 }
 
 type Pool struct {
-	minRoutines       int32
-	pendingGoRoutines int32 // similar to above but no. of goroutines pending at a time.
-	counter           int32 // number of goroutines that have ran and to give each routine a unique id.
-	tasks             chan Worker
+	minRoutines       int32         // minimum number of routines that needs to be part of pool.
+	pendingGoRoutines int32         // similar to above but no. of goroutines pending at a time.
+	counter           int32         // number of goroutines that have ran and to give each routine a unique id.
+	tasks             chan Worker   // channel in which task will be sent.
 	shutdown          chan struct{} // to indicate that user has called to destroy this workpool.
 	wg                sync.WaitGroup
 }
@@ -40,23 +40,38 @@ func (p *Pool) Register(work Worker) {
 	atomic.AddInt32(&p.pendingGoRoutines, -1)
 }
 
+func (p *Pool) processTask(task Worker) {
+	p.wg.Add(1)
+	processId := p.counter
+	fmt.Println("STARTING WORK", processId)
+	defer p.wg.Done()
+	task.Work(processId)
+	fmt.Println("WORK DONE!!", processId)
+}
+
 func (p *Pool) Controller() {
 	p.wg.Add(1) // since controller itself is a goroutine.
+	fmt.Println("ADDING IN WORK WG")
 	go func() {
 		for {
 			select {
-			case <-p.tasks:
+			case task := <-p.tasks:
 				fmt.Println("TASK RECEIVED")
 				p.counter++ // increment counter one task is now received from channel.
+				go p.processTask(task)
 			case <-p.shutdown:
 				fmt.Println("CLEANUP CODE HERE")
+				p.wg.Done()
+				close(p.tasks)
+				close(p.shutdown)
 			}
 		}
 	}()
 }
 
 func (p *Pool) Destroy() {
-	p.wg.Done()
 	// signal the shutdown phase
+	fmt.Println("REMOVING IN WORK WG")
+	fmt.Println("CLOSED CHANNELS")
 	p.shutdown <- struct{}{}
 }
