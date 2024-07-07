@@ -28,7 +28,7 @@ func main() {
 	log.Printf("Loaded %d docs in %v", len(docs), time.Since(start))
 
 	// 2. Index the documents.
-	searchIdx := make(utils.Index)
+	searchIdx := utils.NewIndex()
 	searchIdx.Add(docs)
 	log.Printf("Indexed %d docs in %v\n", len(docs), time.Since(start))
 	start = time.Now()

@@ -12,6 +12,8 @@ func lowercaseFilter(tokens []string) []string {
 }
 
 func stopwordFilter(tokens []string) []string {
+	// Removes stop words in english language.
+	//TODO:: This should be done by some external package that has support for all the stop words in english language.
 	var enStopwords = map[string]struct{}{ // maybe use a stopword library, it has more words.
 		"a": {}, "and": {}, "be": {}, "have": {}, "i": {},
 		"in": {}, "of": {}, "that": {}, "the": {}, "to": {},

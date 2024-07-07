@@ -1,18 +1,55 @@
 package utils
 
-type Index map[string][]int
+import (
+	"sync"
 
-func (idx Index) Add(docs []document) {
-	for _, doc := range docs {
-		tokens := analyze(doc.Text)
-		for _, token := range tokens {
-			ids := idx[token]
-			if ids != nil && ids[len(ids)-1] == doc.Id {
-				continue
+	"github.com/Wild-Soul/go-fts-engine/ds"
+)
+
+type Index struct {
+	ds.SafeMap[string, []int]
+}
+
+func NewIndex() *Index {
+	return &Index{
+		SafeMap: *ds.NewSafeMap[string, []int](),
+	}
+}
+
+func (idx *Index) processAdd(ch <-chan document) {
+	doc := <-ch
+	tokens := analyze(doc.Text)
+	for _, token := range tokens {
+		if ids, exists := idx.Get(token); exists {
+			// Check if doc.Id already exists in the slice
+			for _, id := range ids {
+				if id == doc.Id {
+					return // docID already exists, no need to add
+				}
 			}
-			idx[token] = append(ids, doc.Id)
+			// Append docID if it doesn't exist
+			idx.Set(token, append(ids, doc.Id))
+		} else {
+			// Create new slice with docID if token doesn't exist
+			idx.Set(token, []int{doc.Id})
 		}
 	}
+}
+
+func (idx *Index) Add(docs []document) {
+	var wg sync.WaitGroup
+
+	ch := make(chan document, 100) // 100 docs processed concurrently
+	for _, doc := range docs {
+		wg.Add(1)
+		ch <- doc
+		go func() {
+			idx.processAdd(ch)
+			wg.Done()
+		}()
+	}
+
+	wg.Wait() // wait for all docs to be processed.
 }
 
 func Interection(a, b []int) []int {
@@ -36,13 +73,13 @@ func Interection(a, b []int) []int {
 	return res
 }
 
-func (idx Index) Search(text string) []int {
+func (idx *Index) Search(text string) []int {
 	// TODO:: Make res a Set, and have methods like Intersection and join.
 	var res []int
 	// search query should also follow the same trasformations that was done during indexing.
 	for _, token := range analyze(text) {
 		// check if token is present in Index
-		if ids, ok := idx[token]; ok {
+		if ids, exists := idx.Get(token); exists {
 			if res == nil {
 				res = ids
 			} else {
