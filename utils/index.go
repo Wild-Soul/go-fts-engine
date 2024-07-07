@@ -7,12 +7,12 @@ import (
 )
 
 type Index struct {
-	ds.SafeMap[string, []int]
+	ds.SafeMap[string, []string]
 }
 
 func NewIndex() *Index {
 	return &Index{
-		SafeMap: *ds.NewSafeMap[string, []int](),
+		SafeMap: *ds.NewSafeMap[string, []string](),
 	}
 }
 
@@ -31,7 +31,7 @@ func (idx *Index) processAdd(ch <-chan document) {
 			idx.Set(token, append(ids, doc.Id))
 		} else {
 			// Create new slice with docID if token doesn't exist
-			idx.Set(token, []int{doc.Id})
+			idx.Set(token, []string{doc.Id})
 		}
 	}
 }
@@ -52,13 +52,13 @@ func (idx *Index) Add(docs []document) {
 	wg.Wait() // wait for all docs to be processed.
 }
 
-func Interection(a, b []int) []int {
+func Interection(a, b []string) []string {
 	// Find the common values between two arrays.
 	n := len(a)
 	if n > len(b) {
 		n = len(b)
 	}
-	res := make([]int, 0, n)
+	res := make([]string, 0, n)
 	for i, j := 0, 0; i < len(a) && j < len(b); {
 		if a[i] < b[j] {
 			i++
@@ -73,9 +73,9 @@ func Interection(a, b []int) []int {
 	return res
 }
 
-func (idx *Index) Search(text string) []int {
+func (idx *Index) Search(text string) []string {
 	// TODO:: Make res a Set, and have methods like Intersection and join.
-	var res []int
+	var res []string
 	// search query should also follow the same trasformations that was done during indexing.
 	for _, token := range analyze(text) {
 		// check if token is present in Index
