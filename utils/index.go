@@ -6,33 +6,49 @@ import (
 	"github.com/Wild-Soul/go-fts-engine/ds"
 )
 
+const EDIT_DISTANCE = 1
+
 type Index struct {
-	ds.SafeMap[string, []string]
+	invertedIndex ds.SafeMap[string, []string]
+	trie          *ds.Trie
+	mu            sync.RWMutex
 }
 
 func NewIndex() *Index {
 	return &Index{
-		SafeMap: *ds.NewSafeMap[string, []string](),
+		invertedIndex: *ds.NewSafeMap[string, []string](),
+		trie:          ds.NewTrie(),
 	}
+}
+
+func (idx *Index) Insert(word string, docID string) {
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
+
+	// Update inverted index
+	if ids, exists := idx.invertedIndex.Get(word); exists {
+		idx.invertedIndex.Set(word, append(ids, docID))
+	} else {
+		idx.invertedIndex.Set(word, []string{docID})
+	}
+
+	// Update Trie
+	node := idx.trie.GetRoot()
+	for _, char := range word {
+		if _, exists := node.GetChild(char); !exists {
+			node.InitChild(char)
+		}
+		node, _ = node.GetChild(char)
+	}
+	node.SetIsEnd(true)
 }
 
 func (idx *Index) processAdd(ch <-chan document) {
 	doc := <-ch
 	tokens := analyze(doc.Text)
 	for _, token := range tokens {
-		if ids, exists := idx.Get(token); exists {
-			// Check if doc.Id already exists in the slice
-			for _, id := range ids {
-				if id == doc.Id {
-					return // docID already exists, no need to add
-				}
-			}
-			// Append docID if it doesn't exist
-			idx.Set(token, append(ids, doc.Id))
-		} else {
-			// Create new slice with docID if token doesn't exist
-			idx.Set(token, []string{doc.Id})
-		}
+		// Update Trie and inverted index
+		idx.Insert(token, doc.Id)
 	}
 }
 
@@ -73,22 +89,35 @@ func Interection(a, b []string) []string {
 	return res
 }
 
-func (idx *Index) Search(text string) []string {
-	// TODO:: Make res a Set, and have methods like Intersection and join.
+func findInInvertedIdx(idx *Index, token string) []string {
+	if ids, exists := idx.invertedIndex.Get(token); exists {
+		return ids
+	}
+	return []string{}
+}
+
+func (idx *Index) ExactSearch(text string) []string {
 	var res []string
 	// search query should also follow the same trasformations that was done during indexing.
 	for _, token := range analyze(text) {
 		// check if token is present in Index
-		if ids, exists := idx.Get(token); exists {
-			if res == nil {
-				res = ids
-			} else {
-				res = Interection(res, ids) // find the document ids that match for each token
-			}
-		} else {
-			// TODO:: Make it a score based response, return all/top n docs that matches at-least one work from query string.
-			// For each doc that contains a distinct token, increase the score.
-			return nil // token doesn't exists
+		ids := findInInvertedIdx(idx, token)
+		res = Interection(res, ids) // only keep those documents that match for each token in query.
+	}
+	return res
+}
+
+// Searches through Trie datastructure using for similar tokens.
+// Then gets the docIds from inverted index for these new tokens.
+func (idx *Index) FuzzySearch(text string) []string {
+	var res []string
+	// search query should also follow the same trasformations that was done during indexing.
+	for _, token := range analyze(text) {
+		// check if token is present in Index
+		similarTokens := idx.trie.FuzzySearch(token, EDIT_DISTANCE)
+		for _, sT := range similarTokens {
+			ids := findInInvertedIdx(idx, sT)
+			res = Interection(res, ids) // only keep those documents that match for each token in query.
 		}
 	}
 	return res

@@ -81,7 +81,7 @@ func queryDocs(index *utils.Index) gin.HandlerFunc {
 			return
 		}
 
-		matchedIds := index.Search(query.Query)
+		matchedIds := index.ExactSearch(query.Query)
 		c.JSON(http.StatusOK, matchedIds)
 	}
 }
