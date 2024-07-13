@@ -10,7 +10,7 @@ type document struct {
 	Title string `xml:"title"`
 	Url   string `xml:"url"`
 	Text  string `xml:"abstract"`
-	Id    int
+	Id    string
 }
 
 func LoadDocuments(path string) ([]document, error) {
@@ -35,8 +35,8 @@ func LoadDocuments(path string) ([]document, error) {
 	}
 
 	docs := dump.Documents
-	for i := range docs {
-		docs[i].Id = i
+	for i, doc := range docs {
+		docs[i].Id = doc.Url // TODO:: this should be uuid
 	}
 	return docs, nil
 }
